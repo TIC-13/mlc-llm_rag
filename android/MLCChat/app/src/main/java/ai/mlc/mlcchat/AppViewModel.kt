@@ -661,7 +661,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             require(chatable())
             switchToGenerating()
             executorService.submit {
-                appendMessage(MessageRole.User, "What is 3 + 2?")
+                appendMessage(MessageRole.User, prompt + "What is 3 + 2?")
                 appendMessage(MessageRole.Assistant, "")
                 viewModelScope.launch {
                     val channel = engine.chat.completions.create(
