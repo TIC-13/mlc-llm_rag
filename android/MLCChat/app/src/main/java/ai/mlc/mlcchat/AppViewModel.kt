@@ -661,14 +661,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             require(chatable())
             switchToGenerating()
             executorService.submit {
-                appendMessage(MessageRole.User, prompt)
+                appendMessage(MessageRole.User, "What is 3 + 2?")
                 appendMessage(MessageRole.Assistant, "")
                 viewModelScope.launch {
                     val channel = engine.chat.completions.create(
                         messages = listOf(
                             ChatCompletionMessage(
                                 role = OpenAIProtocol.ChatCompletionRole.user,
-                                content = prompt
+                                content = "What is 3 + 2?"
                             )
                         ),
                         stream_options = OpenAIProtocol.StreamOptions(include_usage = true)

@@ -17,7 +17,7 @@
         android:label="@string/app_name"
         android:roundIcon="@drawable/mlc_logo_108"
         android:supportsRtl="true"
-        android:theme="@style/Theme.MLCChat"
+        android:theme="@style/Theme.ReggaeLLM"
         tools:targetApi="31">
         <uses-native-library
             android:name="libOpenCL.so"
