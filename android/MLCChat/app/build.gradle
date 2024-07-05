@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace 'ai.mlc.mlcchat'
+    namespace 'ai.luxai.reggaellm'
     compileSdk 34
 
     defaultConfig {
-        applicationId 'ai.mlc.reggaellm'
+        applicationId 'ai.luxai.reggaellm'
         minSdk 26
         targetSdk 33
         versionCode 1
@@ -42,6 +42,8 @@ android {
     packagingOptions {
         resources {
             excludes += '/META-INF/{AL2.0,LGPL2.1}'
+            exclude 'LICENSE-EDL-1.0.txt'
+            exclude 'LICENSE-EPL-1.0.txt'
         }
     }
 }

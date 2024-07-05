@@ -15,7 +15,7 @@ def main(apk_path: Path, package_output_path: Path):
     logger.info('Install apk "%s" to device', str(apk_path.absolute()))
     subprocess.run(["adb", "install", str(apk_path)], check=True, env=os.environ)
     # - Create the weight directory for the app.
-    device_weihgt_dir = "/storage/emulated/0/Android/data/ai.mlc.mlcchat/files/"
+    device_weihgt_dir = "/storage/emulated/0/Android/data/ai.luxai.mlcchat/files/"
     logger.info('Creating directory "%s" on device', device_weihgt_dir)
     subprocess.run(
         ["adb", "shell", "mkdir", "-p", device_weihgt_dir],
@@ -30,7 +30,7 @@ def main(apk_path: Path, package_output_path: Path):
             subprocess.run(["adb", "push", src_path, dst_path], check=True, env=os.environ)
 
             src_path = dst_path
-            dst_path = "/storage/emulated/0/Android/data/ai.mlc.mlcchat/files/"
+            dst_path = "/storage/emulated/0/Android/data/ai.luxai.mlcchat/files/"
             logger.info('Move weights from "%s" to "%s"', src_path, dst_path)
             subprocess.run(["adb", "shell", "mv", src_path, dst_path], check=True, env=os.environ)
     logger.info("All finished.")
@@ -53,7 +53,7 @@ if __name__ == "__main__":
         "--apk-path",
         type=_parse_apk_path,
         default="app/release/app-release.apk",
-        help="The path to generated MLCChat apk file.",
+        help="The path to generated ReggaeLLM apk file.",
     )
     parser.add_argument(
         "--package-output-path",
