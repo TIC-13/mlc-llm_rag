@@ -4,21 +4,21 @@ import com.github.jelmerk.knn.Item;
 
 import java.util.Arrays;
 
-public class Word implements Item<String, float[]> {
+public class Chunk implements Item<String, float[]> {
 
     private static final long serialVersionUID = 1L;
 
-    private final String id;
+    private final String text;
     private final float[] vector;
 
-    public Word(String id, float[] vector) {
-        this.id = id;
+    public Chunk(String text, float[] vector) {
+        this.text = text;
         this.vector = vector;
     }
 
     @Override
     public String id() {
-        return id;
+        return text;
     }
 
     @Override
@@ -33,8 +33,8 @@ public class Word implements Item<String, float[]> {
 
     @Override
     public String toString() {
-        return "Word{" +
-                "id='" + id + '\'' +
+        return "Chunk{" +
+                "id='" + text + '\'' +
                 ", vector=" + Arrays.toString(vector) +
                 '}';
     }

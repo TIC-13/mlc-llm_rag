@@ -2,6 +2,7 @@ package ai.luxai.reggaellm
 
 import ai.mlc.mlcllm.MLCEngine
 import ai.mlc.mlcllm.OpenAIProtocol
+import ai.mlc.mlcllm.OpenAIProtocol.ChatCompletionMessage
 import android.app.Application
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -12,22 +13,25 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.toMutableStateList
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.github.jelmerk.knn.DistanceFunctions
+import com.github.jelmerk.knn.hnsw.HnswIndex
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import org.apache.commons.csv.CSVFormat
 import java.io.File
 import java.io.FileOutputStream
+import java.io.FileReader
 import java.net.URL
 import java.nio.channels.Channels
 import java.util.UUID
 import java.util.concurrent.Executors
 import kotlin.concurrent.thread
-import ai.mlc.mlcllm.OpenAIProtocol.ChatCompletionMessage
-import kotlinx.coroutines.*
-import com.github.jelmerk.knn.DistanceFunctions
-import com.github.jelmerk.knn.hnsw.HnswIndex
+import kotlin.random.Random
 
-import com.github.jelmerk.knn.util.VectorUtils.normalize
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     val modelList = emptyList<ModelState>().toMutableStateList()
@@ -39,6 +43,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         emptyList<String>().toMutableList(),
         emptyList<ModelRecord>().toMutableList()
     )
+    private var hnswIndex = HnswIndex
+        .newBuilder<FloatArray, Float>(1, DistanceFunctions.FLOAT_INNER_PRODUCT, 1)
+        .build<String, Chunk>()
     private val application = getApplication<Application>()
     private val appDirFile = application.getExternalFilesDir("")
     private val gson = Gson()
@@ -49,9 +56,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         const val ModelConfigFilename = "mlc-chat-config.json"
         const val ParamsConfigFilename = "ndarray-cache.json"
         const val VectorsFilename = "doc_vectors.csv"
-        const val VectorsUrl = "_"
+        const val VectorsUrl = "https://www.dropbox.com/scl/fi/glxvz142zww98ole85d0h/doc_vecs.csv?rlkey=thl2v4aluuf3hnk9dtwfelpzy&st=ce4yak1c&dl=1"
         const val ChunksFilename = "doc_chunks.csv"
-        const val ChunksUrl = "_"
+        const val ChunksUrl = "https://www.dropbox.com/scl/fi/bmfsbw8cnw24bqhxlvqyq/documents.csv?rlkey=r3aheqocw0uv5c4qyhectqdye&st=j8fwxvww&dl=1"
         const val IndexFilename = "doc_index.bin"
         const val ModelUrlSuffix = "resolve/main/"
     }
@@ -61,8 +68,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val indexFile = File(appDirFile, IndexFilename)
         if (!indexFile.exists()) {
             prepareRetrievalData()
+        } else {
+            loadRetrievalData()
         }
-        loadRetrievalData()
     }
 
     fun isShowingAlert(): Boolean {
@@ -295,21 +303,58 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
                 }
-                
-                // TODO:
-                //      - Read csv
-                //      - Add vectors to Index
-                //      - Serialize Index
+
+                val reader1 = FileReader(File(appDirFile, VectorsFilename).toString())
+                val csvFormat1 = CSVFormat.DEFAULT
+                                    .builder()
+                                    .setIgnoreSurroundingSpaces(true)
+                                    .setIgnoreEmptyLines(true)
+                                    .build()
+                val records1 = csvFormat1.parse(reader1).drop(1)
+
+                val reader2 = FileReader(File(appDirFile, ChunksFilename).toString())
+                val csvFormat2 = CSVFormat.DEFAULT
+                    .builder()
+                    .setIgnoreSurroundingSpaces(true)
+                    .setIgnoreEmptyLines(true)
+                    .build()
+                val records2 = csvFormat2.parse(reader2).drop(1)
+
+                var chunks = emptyList<Chunk>()
+                for (i in records2.indices) {
+                    val chunk = Chunk(records2[i][0], records1[i].map{it.toFloat()}.toFloatArray())
+                    chunks = chunks.plusElement(chunk)
+                }
+
+                hnswIndex = HnswIndex
+                    .newBuilder<FloatArray, Float>(chunks[0].vector().size, DistanceFunctions.FLOAT_INNER_PRODUCT, chunks.size)
+                    .withM(4)
+                    .withEf(16)
+                    .withEfConstruction(16)
+                    .build<String, Chunk>()
+
+                // Add items to the index
+                for (chunk in chunks) {
+                    hnswIndex.add(chunk)
+                }
+
+                hnswIndex.save(File(appDirFile, IndexFilename))
+                if (!File(appDirFile, IndexFilename).exists()) {
+                    throw Exception("Saving index failed")
+                }
             } catch (e: Exception) {
                 viewModelScope.launch {
-                    issueAlert("Index creation failed: ${e.localizedMessage}")
+                    issueAlert("Index creation failed: ${e.message}")
                 }
             }
         }
     }
 
     private fun loadRetrievalData() {
-        TODO("Not yet implemented")
+        if (!File(appDirFile, IndexFilename).exists()) {
+            throw Exception("Index file not found")
+        }
+        hnswIndex = HnswIndex.load(File(appDirFile, IndexFilename))
     }
 
     inner class ModelState(
@@ -749,28 +794,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             require(chatable())
             switchToGenerating()
             executorService.submit {
-                val words: List<Word> = listOf(
-                    Word("Hello, from HNSW", normalize(floatArrayOf(0.1f, 0.2f, 0.3f))),
-                    Word("Hello, from Kotlin", normalize(floatArrayOf(0.4f, 0.5f, 0.6f)))
-                )
-
-                val hnswIndex = HnswIndex
-                    .newBuilder<FloatArray, Float>(3, DistanceFunctions.FLOAT_INNER_PRODUCT, words.size)
-                    .withM(4)
-                    .withEf(16)
-                    .withEfConstruction(16)
-                    .build<String, Word>()
-
-                // Add items to the index
-                for (word in words) {
-                    hnswIndex.add(word)
-                }
-
                 // Example search
-                val queryVector = normalize(floatArrayOf(0.1f, 0.2f, 0.3f)) // Example query vector
-                val results = hnswIndex.findNearest(queryVector, 1)
+                val query = hnswIndex.items().elementAt(Random.nextInt(0, hnswIndex.size()))
+                val results = hnswIndex.findNearest(query.vector(), 1)
 
-                appendMessage(MessageRole.User, prompt + " " + results[0].item().id())
+                appendMessage(MessageRole.User, prompt + "\nQuery: " + query.id() + "\nRetrieved" + results[0].item().id())
                 appendMessage(MessageRole.Assistant, "")
                 viewModelScope.launch {
                     val channel = engine.chat.completions.create(
