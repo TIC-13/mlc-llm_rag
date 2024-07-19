@@ -5,12 +5,6 @@
             "model": "HF://mlc-ai/Phi-3-mini-4k-instruct-q4f16_1-MLC",
             "estimated_vram_bytes": 4250586449,
             "model_id": "Phi-3-mini-4k-instruct-q4f16_1-MLC"
-        },
-        {
-            "model": "HF://mlc-ai/Qwen2-1.5B-Instruct-q4f16_1-MLC",
-            "estimated_vram_bytes": 3980990464,
-            "model_id": "Qwen2-1.5B-Instruct-q4f16_1-MLC"
-
         }
     ]
 }

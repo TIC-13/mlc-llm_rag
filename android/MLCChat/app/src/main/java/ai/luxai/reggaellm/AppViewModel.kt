@@ -24,7 +24,6 @@ import kotlinx.coroutines.launch
 import org.apache.commons.csv.CSVFormat
 import java.io.File
 import java.io.FileOutputStream
-import java.io.FileReader
 import java.net.URL
 import java.nio.channels.Channels
 import java.util.UUID
@@ -56,21 +55,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         const val ModelConfigFilename = "mlc-chat-config.json"
         const val ParamsConfigFilename = "ndarray-cache.json"
         const val VectorsFilename = "doc_vectors.csv"
-        const val VectorsUrl = "https://www.dropbox.com/scl/fi/glxvz142zww98ole85d0h/doc_vecs.csv?rlkey=thl2v4aluuf3hnk9dtwfelpzy&st=ce4yak1c&dl=1"
         const val ChunksFilename = "doc_chunks.csv"
-        const val ChunksUrl = "https://www.dropbox.com/scl/fi/bmfsbw8cnw24bqhxlvqyq/documents.csv?rlkey=r3aheqocw0uv5c4qyhectqdye&st=j8fwxvww&dl=1"
         const val IndexFilename = "doc_index.bin"
         const val ModelUrlSuffix = "resolve/main/"
     }
 
     init {
         loadAppConfig()
+    }
+
+    fun isIndexReady(): Boolean {
         val indexFile = File(appDirFile, IndexFilename)
-        if (!indexFile.exists()) {
-            prepareRetrievalData()
-        } else {
-            loadRetrievalData()
-        }
+        return indexFile.exists()
     }
 
     fun isShowingAlert(): Boolean {
@@ -249,70 +245,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private fun prepareRetrievalData() {
         thread(start = true) {
             try {
-                val vecUrl = URL(VectorsUrl)
-                val cnkUrl = URL(ChunksUrl)
-                
-                val tempId1 = UUID.randomUUID().toString()
-                val tempFile1 = File(
-                    application.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
-                    tempId1
-                )
-                vecUrl.openStream().use {
-                    Channels.newChannel(it).use { src ->
-                        FileOutputStream(tempFile1).use { fileOutputStream ->
-                            fileOutputStream.channel.transferFrom(src, 0, Long.MAX_VALUE)
-                        }
-                    }
-                }
-                require(tempFile1.exists())
-                viewModelScope.launch {
-                    try {
-                        val finalPath = File(appDirFile, VectorsFilename)
-                        tempFile1.copyTo(finalPath, overwrite = true)
-                        tempFile1.delete()
-                        require(finalPath.exists())
-                    } catch (e: Exception) {
-                        viewModelScope.launch {
-                            issueAlert("Save vector csv failed: ${e.localizedMessage}")
-                        }
-                    }
-                }
-
-                val tempId2 = UUID.randomUUID().toString()
-                val tempFile2 = File(
-                    application.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
-                    tempId2
-                )
-                cnkUrl.openStream().use {
-                    Channels.newChannel(it).use { src ->
-                        FileOutputStream(tempFile2).use { fileOutputStream ->
-                            fileOutputStream.channel.transferFrom(src, 0, Long.MAX_VALUE)
-                        }
-                    }
-                }
-                require(tempFile2.exists())
-                viewModelScope.launch {
-                    try {
-                        val finalPath = File(appDirFile, ChunksFilename)
-                        tempFile2.copyTo(finalPath, overwrite = true)
-                        tempFile2.delete()
-                        require(finalPath.exists())
-                    } catch (e: Exception) {
-                        viewModelScope.launch {
-                            issueAlert("Save chunks csv failed: ${e.localizedMessage}")
-                        }
-                    }
-                }
-
-                val reader1 = FileReader(File(appDirFile, VectorsFilename).toString())
+                val reader1 = application.assets.open(VectorsFilename).bufferedReader()
                 val csvFormat1 = CSVFormat.DEFAULT
                                     .builder()
                                     .setIgnoreSurroundingSpaces(true)
                                     .setIgnoreEmptyLines(true)
                                     .build()
                 val records1 = csvFormat1.parse(reader1).drop(1)
-
-                val reader2 = FileReader(File(appDirFile, ChunksFilename).toString())
+                val reader2 = application.assets.open(ChunksFilename).bufferedReader()
                 val csvFormat2 = CSVFormat.DEFAULT
                     .builder()
                     .setIgnoreSurroundingSpaces(true)
@@ -777,12 +717,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             this.modelPath = modelPath
             executorService.submit {
                 viewModelScope.launch {
-                    Toast.makeText(application, "Initialize...", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(application, "Initialize Engine...", Toast.LENGTH_SHORT).show()
                 }
                 if (!callBackend {
                         engine.unload()
                         engine.reload(modelPath, modelConfig.modelLib)
                     }) return@submit
+                viewModelScope.launch {
+                    Toast.makeText(application, "Initialize Retrieval Module...", Toast.LENGTH_SHORT).show()
+                }
+                loadAppConfig()
+                if (!isIndexReady()) {
+                    prepareRetrievalData()
+                } else {
+                    loadRetrievalData()
+                }
                 viewModelScope.launch {
                     Toast.makeText(application, "Ready to chat", Toast.LENGTH_SHORT).show()
                     switchToReady()
