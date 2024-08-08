@@ -8,9 +8,11 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.os.Environment
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.toMutableStateList
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.github.jelmerk.knn.DistanceFunctions
@@ -32,7 +34,7 @@ import kotlin.concurrent.thread
 import kotlin.random.Random
 
 
-class AppViewModel(application: Application) : AndroidViewModel(application) {
+class AppViewModel(application: Application, context: Context) : AndroidViewModel(application), TextEmbedderWrapper.EmbedderListener {
     val modelList = emptyList<ModelState>().toMutableStateList()
     val chatState = ChatState()
     val modelSampleList = emptyList<ModelRecord>().toMutableStateList()
@@ -49,6 +51,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val appDirFile = application.getExternalFilesDir("")
     private val gson = Gson()
     private val modelIdSet = emptySet<String>().toMutableSet()
+
+    var textEmbedder = TextEmbedderWrapper(context, listener = this)
 
     companion object {
         const val AppConfigFilename = "mlc-app-config.json"
@@ -588,6 +592,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 callBackend { engine.reset() }
                 viewModelScope.launch {
                     clearHistory()
+                    resetEmbedder()
                     switchToReady()
                 }
             }
@@ -598,6 +603,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             report.value = ""
         }
 
+        private fun resetEmbedder() {
+            textEmbedder?.clearEmbedder()
+            textEmbedder?.setupEmbedder()
+        }
 
         private fun switchToResetting() {
             modelChatState.value = ModelChatState.Resetting
@@ -733,6 +742,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     loadRetrievalData()
                 }
                 viewModelScope.launch {
+                    resetEmbedder()
                     Toast.makeText(application, "Ready to chat", Toast.LENGTH_SHORT).show()
                     switchToReady()
                 }
@@ -746,6 +756,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 // Example search
                 val query = hnswIndex.items().elementAt(Random.nextInt(0, hnswIndex.size()))
                 val results = hnswIndex.findNearest(query.vector(), 1)
+
+                val embedding = textEmbedder.embed(prompt)
+                val msg = embedding?.embedding.toString()
+                Log.e("TextEmbedder", "Embedding: " + msg)
 
                 appendMessage(MessageRole.User, prompt + "\nQuery: " + query.id() + "\nRetrieved" + results[0].item().id())
                 appendMessage(MessageRole.Assistant, "")
@@ -796,6 +810,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     || modelChatState.value == ModelChatState.Generating
                     || modelChatState.value == ModelChatState.Falied
         }
+    }
+
+    override fun onError(error: String, errorCode: Int) {
+        issueAlert(error)
+    
     }
 }
 
