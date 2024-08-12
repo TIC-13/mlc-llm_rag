@@ -1,6 +1,7 @@
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
+    id 'de.undercouch.download'
 }
 
 android {
@@ -48,6 +49,10 @@ android {
     }
 }
 
+project.ext.ASSET_DIR = projectDir.toString() + '/src/main/assets'
+project.ext.TEST_ASSETS_DIR = projectDir.toString() + '/src/androidTest/assets'
+apply from: 'download_models.gradle'
+
 dependencies {
     implementation project(":mlc4j")
     implementation 'androidx.core:core-ktx:1.10.1'
@@ -77,4 +82,5 @@ dependencies {
     debugImplementation 'androidx.compose.ui:ui-tooling'
     debugImplementation 'androidx.compose.ui:ui-test-manifest'
 
+    implementation 'com.google.mediapipe:tasks-text:0.20230731'
 }

@@ -1,0 +1,7 @@
+task downloadUniversalEncoderModel(type: Download) {
+    src 'https://storage.googleapis.com/mediapipe-models/text_embedder/universal_sentence_encoder/float32/latest/universal_sentence_encoder.tflite'
+    dest project.ext.ASSET_DIR + '/universal_encoder.tflite'
+    overwrite false
+}
+
+preBuild.dependsOn downloadUniversalEncoderModel
