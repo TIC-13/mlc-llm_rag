@@ -12,7 +12,6 @@ import android.util.Log
 import android.widget.Toast
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.toMutableStateList
-import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.github.jelmerk.knn.DistanceFunctions
@@ -31,7 +30,6 @@ import java.nio.channels.Channels
 import java.util.UUID
 import java.util.concurrent.Executors
 import kotlin.concurrent.thread
-import kotlin.random.Random
 
 
 class AppViewModel(application: Application, context: Context) : AndroidViewModel(application), TextEmbedderWrapper.EmbedderListener {
@@ -754,21 +752,28 @@ class AppViewModel(application: Application, context: Context) : AndroidViewMode
             switchToGenerating()
             executorService.submit {
                 // Example search
-                val query = hnswIndex.items().elementAt(Random.nextInt(0, hnswIndex.size()))
-                val results = hnswIndex.findNearest(query.vector(), 1)
+                val embedResult = textEmbedder.embed(prompt)
+                val embedding = embedResult?.embedding?.floatEmbedding()
+                val retrieved = hnswIndex.findNearest(embedding, 3)
 
-                val embedding = textEmbedder.embed(prompt)
-                val msg = embedding?.embedding.toString()
-                Log.e("TextEmbedder", "Embedding: " + msg)
-
-                appendMessage(MessageRole.User, prompt + "\nQuery: " + query.id() + "\nRetrieved" + results[0].item().id())
+                var final_prompt = "You are an agent that guides the user with a step-by-step guide." +
+                                    "Use the context provided and if you don't know what to answer simply state so." +
+                                    "Do not necessarily use all of the context! Filter out what you need only." +
+                                    "Absorb the context as if it were your own knowledge." +
+                                    "Please, use the following context to answer the user query:"
+                for ((idx, result) in  retrieved.withIndex()) {
+                    final_prompt += ("\n" + idx.toString() + ": " + result.item().id() + ";")
+                }
+                final_prompt += "\nAnd here is the user query:\n$prompt"
+                Log.i("[PROMPT_FORMATTER]", final_prompt)
+                appendMessage(MessageRole.User, prompt)
                 appendMessage(MessageRole.Assistant, "")
                 viewModelScope.launch {
                     val channel = engine.chat.completions.create(
                         messages = listOf(
                             ChatCompletionMessage(
                                 role = OpenAIProtocol.ChatCompletionRole.user,
-                                content = "What is 3 + 2?"
+                                content = final_prompt
                             )
                         ),
                         stream_options = OpenAIProtocol.StreamOptions(include_usage = true)
