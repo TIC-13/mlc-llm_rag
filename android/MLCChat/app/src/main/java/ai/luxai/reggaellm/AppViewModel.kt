@@ -56,8 +56,8 @@ class AppViewModel(application: Application, context: Context) : AndroidViewMode
         const val AppConfigFilename = "mlc-app-config.json"
         const val ModelConfigFilename = "mlc-chat-config.json"
         const val ParamsConfigFilename = "ndarray-cache.json"
-        const val VectorsFilename = "doc_vectors.csv"
-        const val ChunksFilename = "doc_chunks.csv"
+        const val VectorsFilename = "vectors_motorola-edge-30-ultra-256gb-grijs-5g.csv"
+        const val ChunksFilename = "motorola-edge-30-ultra-256gb-grijs-5g.csv"
         const val IndexFilename = "doc_index.bin"
         const val ModelUrlSuffix = "resolve/main/"
     }
@@ -248,25 +248,34 @@ class AppViewModel(application: Application, context: Context) : AndroidViewMode
         thread(start = true) {
             try {
                 val reader1 = application.assets.open(VectorsFilename).bufferedReader()
+                Log.i("[CREATE_INDEX]", "Read vectors file!")
                 val csvFormat1 = CSVFormat.DEFAULT
                                     .builder()
                                     .setIgnoreSurroundingSpaces(true)
                                     .setIgnoreEmptyLines(true)
                                     .build()
+                Log.i("[CREATE_INDEX]", "Loaded format!")
                 val records1 = csvFormat1.parse(reader1).drop(1)
+                Log.i("[CREATE_INDEX]", "Parsed vectors file!")
                 val reader2 = application.assets.open(ChunksFilename).bufferedReader()
+                Log.i("[CREATE_INDEX]", "Read chunks file!")
                 val csvFormat2 = CSVFormat.DEFAULT
                     .builder()
                     .setIgnoreSurroundingSpaces(true)
                     .setIgnoreEmptyLines(true)
+                    .setDelimiter("|")
                     .build()
                 val records2 = csvFormat2.parse(reader2).drop(1)
 
+                Log.i("[CREATE_INDEX]", "Parsed chunks file! ${records2.isEmpty()}")
+
                 var chunks = emptyList<Chunk>()
                 for (i in records2.indices) {
+                    Log.i("[CREATE_INDEX]", i.toString())
                     val chunk = Chunk(records2[i][0], records1[i].map{it.toFloat()}.toFloatArray())
                     chunks = chunks.plusElement(chunk)
                 }
+                Log.i("[CREATE_INDEX]", "Created chunk list!")
 
                 hnswIndex = HnswIndex
                     .newBuilder<FloatArray, Float>(chunks[0].vector().size, DistanceFunctions.FLOAT_INNER_PRODUCT, chunks.size)
@@ -274,11 +283,13 @@ class AppViewModel(application: Application, context: Context) : AndroidViewMode
                     .withEf(16)
                     .withEfConstruction(16)
                     .build<String, Chunk>()
+                Log.i("[CREATE_INDEX]", "Initialized index!")
 
                 // Add items to the index
                 for (chunk in chunks) {
                     hnswIndex.add(chunk)
                 }
+                Log.i("[CREATE_INDEX]", "Inserted chunks!")
 
                 hnswIndex.save(File(appDirFile, IndexFilename))
                 if (!File(appDirFile, IndexFilename).exists()) {
@@ -286,6 +297,7 @@ class AppViewModel(application: Application, context: Context) : AndroidViewMode
                 }
             } catch (e: Exception) {
                 viewModelScope.launch {
+                    Toast.makeText(application, e.message, Toast.LENGTH_SHORT).show();
                     issueAlert("Index creation failed: ${e.message}")
                 }
             }
@@ -603,7 +615,7 @@ class AppViewModel(application: Application, context: Context) : AndroidViewMode
 
         private fun resetEmbedder() {
             textEmbedder?.clearEmbedder()
-            textEmbedder?.setupEmbedder()
+            // textEmbedder?.setupEmbedder()
         }
 
         private fun switchToResetting() {
@@ -730,13 +742,17 @@ class AppViewModel(application: Application, context: Context) : AndroidViewMode
                         engine.unload()
                         engine.reload(modelPath, modelConfig.modelLib)
                     }) return@submit
-                viewModelScope.launch {
-                    Toast.makeText(application, "Initialize Retrieval Module...", Toast.LENGTH_SHORT).show()
-                }
+
                 loadAppConfig()
                 if (!isIndexReady()) {
+                    viewModelScope.launch {
+                        Toast.makeText(application, "Initialize Retrieval Module...", Toast.LENGTH_SHORT).show()
+                    }
                     prepareRetrievalData()
                 } else {
+                    viewModelScope.launch {
+                        Toast.makeText(application, "Loading Existing Retrieval Module...", Toast.LENGTH_SHORT).show()
+                    }
                     loadRetrievalData()
                 }
                 viewModelScope.launch {
@@ -752,15 +768,13 @@ class AppViewModel(application: Application, context: Context) : AndroidViewMode
             switchToGenerating()
             executorService.submit {
                 // Example search
+                textEmbedder.setupEmbedder()
                 val embedResult = textEmbedder.embed(prompt)
+                textEmbedder.clearEmbedder()
                 val embedding = embedResult?.embedding?.floatEmbedding()
-                val retrieved = hnswIndex.findNearest(embedding, 3)
+                val retrieved = hnswIndex.findNearest(embedding, 2)
 
-                var final_prompt = "You are an agent that guides the user with a step-by-step guide." +
-                                    "Use the context provided and if you don't know what to answer simply state so." +
-                                    "Do not necessarily use all of the context! Filter out what you need only." +
-                                    "Absorb the context as if it were your own knowledge." +
-                                    "Please, use the following context to answer the user query:"
+                var final_prompt = "Please, use the following context to answer the user query:"
                 for ((idx, result) in  retrieved.withIndex()) {
                     final_prompt += ("\n" + idx.toString() + ": " + result.item().id() + ";")
                 }

@@ -19,28 +19,54 @@ class TextEmbedderWrapper(
     private var textEmbedder: TextEmbedder? = null
 
     init {
-        setupEmbedder()
     }
 
     fun setupEmbedder() {
         val baseOptionsBuilder = BaseOptions.builder()
-        when (currentDelegate) {
-            DELEGATE_CPU -> {
-                baseOptionsBuilder.setDelegate(Delegate.CPU)
+        try {
+            when (currentDelegate) {
+                DELEGATE_CPU -> {
+                    baseOptionsBuilder.setDelegate(Delegate.CPU)
+                }
+                DELEGATE_GPU -> {
+                    baseOptionsBuilder.setDelegate(Delegate.GPU)
+                }
             }
-            DELEGATE_GPU -> {
-                baseOptionsBuilder.setDelegate(Delegate.GPU)
-            }
+        } catch (e: Exception) {
+            Log.e(
+                TAG, "2. Text embedder failed to load the model with error: " + e.message
+            )
         }
-        when (currentModel) {
-            MODEL_UNIVERSAL_ENCODER -> {
-                baseOptionsBuilder.setModelAssetPath((MODEL_UNIVERSAL_ENCODER_PATH))
+
+        try {
+            when (currentModel) {
+                MODEL_MOBILE_BERT -> {
+                    baseOptionsBuilder.setModelAssetPath(MODEL_MOBILE_BERT_PATH)
+                }
+                MODEL_AVERAGE_WORD -> {
+                    baseOptionsBuilder.setModelAssetPath(MODEL_AVERAGE_WORD_PATH)
+                }
+                MODEL_UNIVERSAL_ENCODER -> {
+                    baseOptionsBuilder.setModelAssetPath(MODEL_UNIVERSAL_ENCODER_PATH)
+                }
             }
+        } catch (e: Exception) {
+            Log.e(
+                TAG, "2. Text embedder failed to load the model with error: " + e.message
+            )
         }
+
+
         try {
             val baseOptions = baseOptionsBuilder.build()
-            val optionsBuilder = TextEmbedderOptions.builder().setBaseOptions(baseOptions)
+            val optionsBuilder = TextEmbedderOptions
+                                    .builder()
+                                    .setBaseOptions(baseOptions)
+                                    .setQuantize(true)
+                                    .setL2Normalize(true)
             val options = optionsBuilder.build()
+            Log.i("CTX", context.toString())
+            Log.i("CTX", options.toString())
             textEmbedder = TextEmbedder.createFromOptions(context, options)
         } catch (e: IllegalStateException) {
             listener?.onError(
@@ -86,7 +112,11 @@ class TextEmbedderWrapper(
         const val DELEGATE_CPU = 0
         const val DELEGATE_GPU = 1
         const val MODEL_UNIVERSAL_ENCODER = 0
-        const val MODEL_UNIVERSAL_ENCODER_PATH = "universal_encoder.tflite"
+        const val MODEL_MOBILE_BERT = 1
+        const val MODEL_AVERAGE_WORD = 2
+        const val MODEL_UNIVERSAL_ENCODER_PATH = "universal_sentence_encoder.tflite"
+        const val MODEL_MOBILE_BERT_PATH = "mobile_bert.tflite"
+        const val MODEL_AVERAGE_WORD_PATH = "average_word.tflite"
         const val OTHER_ERROR = 0
         const val GPU_ERROR = 1
         private const val TAG = "TextEmbedder"
